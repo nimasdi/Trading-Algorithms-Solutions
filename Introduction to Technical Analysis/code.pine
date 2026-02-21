@@ -1,0 +1,153 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © nimasaeidi
+
+//@version=6
+strategy("pivot strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10)
+
+leftBars = input.int(7, "Left Bars") 
+rightBars = input.int(7, "Right Bars")
+
+pivot_style = input.string("low/high", options = ["low/high", "ohlc-r1/s1", "ohlc-r2/s2"])
+strategy_type = input.string("breakout", options = ["breakout", "bouncing"])
+
+volume_length = input.int(15, title = "Volume MA Period")
+volume_multiplier = input.float(1.3, title = "Volume Multiplier", minval = 1.0)
+
+fast_length = input.int(12, title = "MACD Fast Length")
+slow_length = input.int(26, title = "MACD Slow Length")
+signal_length = input.int(9, title = "MACD Signal Length")
+
+rsi_length = input.int(14, title = "RSI Length")
+rsi_overbought_threshold = input.int(65)
+rsi_oversold_threshold = input.int(35)
+
+start_date = input.time(timestamp("2024-01-01"), "Start Date")
+end_date = input.time(timestamp("2025-12-31"), "End Date")
+
+use_dynamic_position = input.bool(false, "Use Dynamic Position Sizing")
+use_equity_based_qty = input.bool(false, "Use Equity-Based Quantity (Equity / Price)")
+
+breakout_conf_bars = input.int(2, "Breakout Confirmation Bars", minval = 1, maxval = 5)
+
+stop_loss_percent = input.float(0.5, "Stop Loss (%)", step = 0.1) / 100
+take_profit_percent = input.float(8.0, "Take Profit (%)", step = 0.1) / 100
+trail_percent = input.float(1.5, "Trailing Stop (%)", step = 0.1) / 100
+
+inDateRange = (time >= start_date) and (time <= end_date)
+
+
+var float lastHighPiv = na
+var float lastLowPiv = na
+
+highPiv = ta.pivothigh(leftBars, rightBars)
+lowPiv = ta.pivotlow(leftBars, rightBars)
+
+if pivot_style != "low/high"
+    ph = high[1]
+    pl = low[1]
+    pc = close[1]
+    pp = (ph + pl + pc) / 3
+    r1 = 2 * pp - pl
+    s1 = 2 * pp - ph
+    r2 = pp + (ph - pl)
+    s2 = pp - (ph - pl)
+    if pivot_style == "ohlc-r1/s1"
+        lastHighPiv := r1
+        lastLowPiv := s1
+    else
+        lastHighPiv := r2
+        lastLowPiv := s2
+else
+    if not na(highPiv)
+        lastHighPiv := highPiv
+    if not na(lowPiv)
+        lastLowPiv := lowPiv
+
+long_breakout = not na(lastHighPiv) and close > lastHighPiv and close[1] <= lastHighPiv
+short_breakout = not na(lastLowPiv) and close < lastLowPiv and close[1] >= lastLowPiv
+
+var int long_breakout_count = 0
+var int short_breakout_count = 0
+
+if long_breakout
+    long_breakout_count := 1
+else if long_breakout_count > 0 and long_breakout_count < breakout_conf_bars
+    long_breakout_count += 1
+else if close < lastHighPiv
+    long_breakout_count := 0
+
+if short_breakout
+    short_breakout_count := 1
+else if short_breakout_count > 0 and short_breakout_count < breakout_conf_bars
+    short_breakout_count += 1
+else if close > lastLowPiv
+    short_breakout_count := 0
+
+breakAbove = long_breakout_count == breakout_conf_bars
+breakBelow = short_breakout_count == breakout_conf_bars
+
+bouncingUp = not na(lastLowPiv) and low <= lastLowPiv * 1.02 and close > open and close > lastLowPiv
+bouncingDown = not na(lastHighPiv) and high >= lastHighPiv * 0.98 and close < open and close < lastHighPiv
+
+volume_ma = ta.sma(volume, volume_length)
+volume_ok = volume > volume_ma * volume_multiplier
+volume_factor = math.min(volume / (volume_ma * volume_multiplier), 2.0)
+
+[macd_line, signal_line, hist_line] = ta.macd(close, fast_length, slow_length, signal_length)
+macd_bullish = macd_line > signal_line and hist_line > hist_line[1]
+macd_bearish = macd_line < signal_line and hist_line < hist_line[1]
+
+
+rsi = ta.rsi(close, rsi_length)
+rsi_factor_long = math.max(1 - (rsi - rsi_oversold_threshold) / (100 - rsi_oversold_threshold), 0.1)
+rsi_factor_short = math.max((rsi_overbought_threshold - rsi) / rsi_overbought_threshold, 0.1)
+
+longCondition = false
+shortCondition = false
+if strategy_type == "breakout"
+    longCondition := breakAbove and macd_bullish and rsi > rsi_oversold_threshold and volume_ok
+    shortCondition := breakBelow and macd_bearish and rsi < rsi_overbought_threshold and volume_ok
+else
+    longCondition := bouncingUp and macd_bullish and rsi > rsi_oversold_threshold and volume_ok
+    shortCondition := bouncingDown and macd_bearish and rsi < rsi_overbought_threshold and volume_ok
+
+
+base_qty = use_equity_based_qty ? strategy.equity / close : 1.0
+long_qty = use_dynamic_position ? base_qty * volume_factor * rsi_factor_long : base_qty
+short_qty = use_dynamic_position ? base_qty * volume_factor * rsi_factor_short : base_qty
+
+
+if inDateRange
+    if longCondition and strategy.position_size == 0
+        strategy.entry("Long", strategy.long, qty=long_qty)
+    
+    if shortCondition and strategy.position_size == 0
+        strategy.entry("Short", strategy.short, qty=short_qty)
+    
+    if strategy.position_size > 0
+        sl = strategy.position_avg_price * (1 - stop_loss_percent)
+        tp = strategy.position_avg_price * (1 + take_profit_percent)
+        strategy.exit("Exit Long", "Long", stop=sl, limit=tp)
+    
+    if strategy.position_size < 0
+        sl = strategy.position_avg_price * (1 + stop_loss_percent)
+        tp = strategy.position_avg_price * (1 - take_profit_percent)
+        strategy.exit("Exit Short", "Short", stop=sl, limit=tp)
+
+
+plot(inDateRange ? lastHighPiv : na, title="High Pivot", color=color.new(color.orange, 0), style=plot.style_stepline)
+plot(inDateRange ? lastLowPiv : na, title="Low Pivot", color=color.new(color.teal, 0), style=plot.style_stepline)
+
+bgcolor(inDateRange ? na : color.new(color.gray, 90), title="Outside Range Dim")
+bgcolor(inDateRange and (volume_ok and (longCondition or shortCondition)) ? color.new(color.blue, 90) : na, title="High Volume Background (In Range)")
+
+
+macd_color = macd_bullish ? color.green : macd_bearish ? color.red : color.gray
+plot(macd_line, title="MACD Line", color=color.blue, linewidth=2)
+plot(signal_line, title="Signal Line", color=color.orange, linewidth=2)
+plot(hist_line, title="MACD Histogram", color=macd_color, style=plot.style_columns, linewidth=1)
+
+rsi_color = rsi > rsi_overbought_threshold ? color.red : rsi < rsi_oversold_threshold ? color.green : color.blue
+hline(rsi_overbought_threshold, "RSI Overbought", color=color.red)
+hline(rsi_oversold_threshold, "RSI Oversold", color=color.green)
+plot(rsi, title="RSI", color=rsi_color, linewidth=2)
