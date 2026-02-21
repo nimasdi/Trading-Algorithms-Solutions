@@ -1,0 +1,63 @@
+Expected Annual Returns (%):
+----------------------------------------
+BTC                 :     8.25%
+ETH                 :     4.51%
+SOL                 :    16.25%
+LINK                :    -1.38%
+DOGE                :    -1.38%
+
+Optimal Portfolio Allocations:
+================================================================================
+
+GLOBAL MINIMUM VARIANCE (GMV)
+----------------------------------------
+ETH                 :    50.00%
+SOL                 :    50.00%
+TOTAL               :   100.00%
+
+Expected Return:        10.38%
+Annual Volatility:       8.94%
+Sharpe Ratio:           0.825
+
+MAXIMUM SHARPE RATIO
+----------------------------------------
+SOL                 :   100.00%
+TOTAL               :   100.00%
+
+Expected Return:        16.25%
+Annual Volatility:      10.00%
+Sharpe Ratio:           1.325
+
+TARGET RETURN
+----------------------------------------
+ETH                 :    34.07%
+SOL                 :    65.93%
+TOTAL               :   100.00%
+
+Expected Return:        12.25%
+Annual Volatility:       9.06%
+Sharpe Ratio:           1.021
+
+EQUAL WEIGHT
+----------------------------------------
+BTC                 :    20.00%
+ETH                 :    20.00%
+SOL                 :    20.00%
+LINK                :    20.00%
+DOGE                :    20.00%
+TOTAL               :   100.00%
+
+Expected Return:         5.25%
+Annual Volatility:      17.10%
+Sharpe Ratio:           0.131
+
+MAXIMUM RETURN
+----------------------------------------
+SOL                 :   100.00%
+TOTAL               :   100.00%
+
+Expected Return:        16.25%
+Annual Volatility:      10.00%
+Sharpe Ratio:           1.325
+
+================================================================================
